@@ -17,6 +17,7 @@ from src.modeling import train_model_zoo
 from src.evaluation import metric_summary
 from src.live_weather import fetch_current_conditions
 from src.features import haversine_km
+from src.real_data import fetch_forecast, fetch_imd_feed
 
 st.set_page_config(page_title="StormWatch | SIH26072", page_icon="⛈️", layout="wide", initial_sidebar_state="expanded")
 
@@ -75,7 +76,25 @@ with st.sidebar:
                 st.session_state["live_weather_error"] = None
             except Exception as exc:
                 st.session_state["live_weather_error"] = str(exc)
-    st.caption("Live context is fetched on demand from Open-Meteo; it is not used to train or validate the storm classifier.")
+    live_city = st.selectbox("Live forecast location", ["Bengaluru","Chennai","Hyderabad","Mumbai"], key="live_city")
+    if st.button("Fetch 24-hour real weather forecast", use_container_width=True):
+        coords = {"Bengaluru":(12.9716,77.5946),"Chennai":(13.0827,80.2707),"Hyderabad":(17.3850,78.4867),"Mumbai":(19.0760,72.8777)}
+        try:
+            st.session_state["forecast_data"] = fetch_forecast(*coords[live_city], label=live_city)
+            st.session_state["forecast_error"] = None
+        except Exception as exc:
+            st.session_state["forecast_error"] = str(exc)
+    if st.button("Fetch official IMD warnings / nowcast", use_container_width=True):
+        try:
+            st.session_state["imd_feeds"] = {
+                "District nowcast": fetch_imd_feed("districtnowcast"),
+                "District warnings": fetch_imd_feed("districtwarning"),
+                "Station nowcast": fetch_imd_feed("stationnowcast"),
+            }
+            st.session_state["imd_error"] = None
+        except Exception as exc:
+            st.session_state["imd_error"] = str(exc)
+    st.caption("Forecast models and official IMD products are kept separate from synthetic model evaluation.")
     st.caption("Prototype build · v3.0 · multi-model evaluation")
 
 try:
@@ -134,7 +153,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric analytics","🤖 AI model lab","🚨 Alert desk","📁 Data & reports","🌐 Live weather context"])
+tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric analytics","🤖 AI model lab","🚨 Alert desk","📁 Data & reports","🌐 Live weather context","🇮🇳 Official IMD feeds"])
 
 with tabs[0]:
     st.markdown("### Regional situation overview")
@@ -320,6 +339,31 @@ with tabs[6]:
         st.warning("Open-Meteo current weather/CAPE fields do not provide verified lightning detections or an observed thunderstorm-event label. These values are context only and are not passed into the trained classifier.")
     st.markdown("#### Data-source roadmap")
     st.markdown("- Open-Meteo model-based atmospheric context is available on demand.\n- Add quality-controlled IMD / radar / satellite feeds after confirming access, licensing and update frequency.\n- Add lightning-network detections and event timestamps before claiming lightning nowcasting skill.")
+
+
+with tabs[7]:
+    st.markdown("### India Meteorological Department · official products")
+    st.caption("Direct IMD API integration for district/station nowcasts and district warnings. Availability depends on IMD API account permissions.")
+    imd_error = st.session_state.get("imd_error")
+    if imd_error:
+        st.error(imd_error)
+    imd_feeds = st.session_state.get("imd_feeds")
+    if not imd_feeds:
+        st.info("Use **Fetch official IMD warnings / nowcast** in the sidebar. If access is denied, register on the IMD API portal and add IMD_API_TOKEN to Render environment variables.")
+    else:
+        for feed_name, feed in imd_feeds.items():
+            st.markdown("#### " + feed_name)
+            payload = feed.get("data")
+            if isinstance(payload, list):
+                frame = pd.json_normalize(payload)
+                st.dataframe(frame, use_container_width=True, hide_index=True)
+                st.download_button("Download " + feed_name + " CSV", frame.to_csv(index=False).encode("utf-8"), feed_name.lower().replace(" ","_") + ".csv", "text/csv", key="download_" + feed_name)
+            else:
+                st.json(payload)
+            st.caption("Source: India Meteorological Department · " + feed.get("source_url",""))
+        st.success("Official IMD feed data retrieved. These are published nowcasts/warnings, not StormWatch ML predictions.")
+    st.markdown("#### Access and operational requirements")
+    st.markdown("- Create an account and request API access at https://api.imd.gov.in/public/index.php\n- Configure the issued credential as IMD_API_TOKEN in Render → Environment\n- Confirm the authentication scheme, permitted endpoints, rate limits and reuse terms with IMD before production use\n- Radar imagery and lightning data endpoints may require specific product access; no radar or strike layer is fabricated here.")
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#7189a2;font-size:11px">STORMWATCH · SIH 2026 · PROBLEM STATEMENT 26072<br>Academic prototype · Synthetic data demonstration · Not for operational warnings</div>',unsafe_allow_html=True)
