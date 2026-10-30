@@ -118,17 +118,24 @@ tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric an
 with tabs[0]:
     st.markdown("### Regional situation overview")
     st.markdown('<div class="section-note">Latest observation by location · illustrative risk derived from the demonstration classifier</div>',unsafe_allow_html=True)
-    latest_rows = focused.sort_values("timestamp").groupby(focused.assign(slot=focused.timestamp.dt.floor("3h"))["slot"]).tail(1)
-    loc = focused.sort_values("timestamp").groupby(focused.assign(region=focused.apply(lambda r: min(["Bengaluru","Chennai","Hyderabad","Mumbai"],key=lambda n:abs(r.latitude-{"Bengaluru":12.97,"Chennai":13.08,"Hyderabad":17.38,"Mumbai":19.07}[n])+abs(r.longitude-{"Bengaluru":77.59,"Chennai":80.27,"Hyderabad":78.49,"Mumbai":72.88}[n])) ,axis=1))["region"]).tail(1).copy()
-    loc["probability"] = model.predict_proba(loc[FEATURE_COLUMNS])[:,1]
-    loc["risk"] = pd.cut(loc.probability,[-.001,.5,.65,.8,1.001],labels=["LOW","WATCH","HIGH","SEVERE"])
+    def nearest_region(row):
+        coords = {"Bengaluru": (12.97, 77.59), "Chennai": (13.08, 80.27),
+                  "Hyderabad": (17.38, 78.49), "Mumbai": (19.07, 72.88)}
+        return min(coords, key=lambda name: abs(row.latitude - coords[name][0]) + abs(row.longitude - coords[name][1]))
+
+    loc = focused.copy()
+    loc["region"] = loc.apply(nearest_region, axis=1)
+    loc = loc.sort_values("timestamp").groupby("region", as_index=False).tail(1).copy()
+    loc["probability"] = model.predict_proba(loc[FEATURE_COLUMNS])[:, 1]
+    loc["risk"] = pd.cut(loc.probability, [-.001, .5, .65, .8, 1.001],
+                         labels=["LOW", "WATCH", "HIGH", "SEVERE"])
     cols = st.columns(4)
-    for col,(_,row) in zip(cols,loc.iterrows()):
+    for col, (_, row) in zip(cols, loc.iterrows()):
         with col:
             st.markdown(f"""<div style="background:#102239;border:1px solid #27445e;border-radius:14px;padding:15px;min-height:130px">
             <div class="smallcaps">{row['risk']} RISK</div><div style="font-size:20px;font-weight:800;margin:8px 0">{row['region']}</div>
             <div style="font:700 26px 'DM Mono';color:#42d6e8">{row['probability']:.0%}</div>
-            <div style="color:#91a6bd;font-size:11px">Humidity {row.humidity_pct:.0f}% · CAPE {row.cape_jkg:.0f} J/kg</div></div>""",unsafe_allow_html=True)
+            <div style="color:#91a6bd;font-size:11px">Humidity {row.humidity_pct:.0f}% · CAPE {row.cape_jkg:.0f} J/kg</div></div>""", unsafe_allow_html=True)
     st.markdown("### Atmospheric signal timeline")
     timeline = focused.sort_values("timestamp").tail(500)
     fig = go.Figure()
@@ -140,7 +147,7 @@ with tabs[0]:
 with tabs[1]:
     st.markdown("### India storm-risk geospatial view")
     st.caption("Station-level sample observations. These are not radar echoes or live lightning-network detections.")
-    mapdata = focused.sort_values("timestamp").groupby(focused.assign(region=focused.apply(lambda r: min(["Bengaluru","Chennai","Hyderabad","Mumbai"],key=lambda n:abs(r.latitude-{"Bengaluru":12.97,"Chennai":13.08,"Hyderabad":17.38,"Mumbai":19.07}[n])+abs(r.longitude-{"Bengaluru":77.59,"Chennai":80.27,"Hyderabad":78.49,"Mumbai":72.88}[n])) ,axis=1))["region"]).tail(1).copy()
+    mapdata = loc.copy()
     mapdata["risk_probability"] = model.predict_proba(mapdata[FEATURE_COLUMNS])[:,1]
     mapdata["risk_band"] = pd.cut(mapdata.risk_probability,[-.001,.5,.65,.8,1.001],labels=["Low","Watch","High","Severe"])
     mf=px.scatter_map(mapdata,lat="latitude",lon="longitude",color="risk_band",size="risk_probability",size_max=36,hover_name="region",hover_data=["risk_probability","humidity_pct","cape_jkg","lightning_count","precipitation_mm"],zoom=3.4,center={"lat":17.5,"lon":78.5},height=570,color_discrete_map={"Low":"#42d6a4","Watch":"#ffbd69","High":"#ff8c69","Severe":"#ff637d"})
