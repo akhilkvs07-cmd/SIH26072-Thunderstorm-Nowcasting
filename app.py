@@ -231,6 +231,27 @@ with tabs[3]:
     comparison = [{"Model": name, **item["metrics"]} for name,item in model_results.items()]
     comparison.append({"Model":"Threshold baseline", **baseline_metrics})
     compare=pd.DataFrame(comparison).sort_values("F1 score",ascending=False)
+    st.markdown("#### Probability quality")
+    from sklearn.calibration import calibration_curve
+    q1,q2=st.columns(2)
+    with q1:
+        if len(np.unique(y_true)) == 2:
+            from sklearn.metrics import roc_curve
+            fpr,tpr,_=roc_curve(y_true, probabilities)
+            roc_fig=go.Figure()
+            roc_fig.add_trace(go.Scatter(x=fpr,y=tpr,mode="lines",name="Selected model",line=dict(color="#42d6e8",width=3)))
+            roc_fig.add_trace(go.Scatter(x=[0,1],y=[0,1],mode="lines",name="Random baseline",line=dict(color="#91a6bd",dash="dash")))
+            roc_fig.update_layout(template="plotly_dark",title="ROC curve",xaxis_title="False positive rate",yaxis_title="True positive rate",height=320,paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(roc_fig,use_container_width=True)
+        else:
+            st.info("ROC curve requires both classes in the held-out period.")
+    with q2:
+        fraction_positive, mean_predicted = calibration_curve(y_true, probabilities, n_bins=8, strategy="quantile")
+        cal_fig=go.Figure()
+        cal_fig.add_trace(go.Scatter(x=mean_predicted,y=fraction_positive,mode="lines+markers",name="Model calibration",line=dict(color="#ffbd69",width=2)))
+        cal_fig.add_trace(go.Scatter(x=[0,1],y=[0,1],mode="lines",name="Ideal calibration",line=dict(color="#91a6bd",dash="dash")))
+        cal_fig.update_layout(template="plotly_dark",title="Calibration curve",xaxis_title="Mean predicted probability",yaxis_title="Observed event frequency",height=320,paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(cal_fig,use_container_width=True)
     st.markdown("#### Model leaderboard")
     st.dataframe(compare,use_container_width=True,hide_index=True)
     st.download_button("Download model leaderboard CSV",compare.to_csv(index=False).encode("utf-8"),"stormwatch_model_leaderboard.csv","text/csv")
