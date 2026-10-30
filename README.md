@@ -11,7 +11,9 @@ A reproducible prototype for short-horizon thunderstorm risk nowcasting. The app
 - Train/test split by time to reduce temporal leakage.
 - Logistic Regression, Random Forest and HistGradientBoosting model comparison plus an interpretable threshold baseline.
 - ROC curve, calibration curve, permutation-based feature importance and model leaderboard.
-- Optional on-demand Open-Meteo current atmospheric context for Bengaluru, Chennai, Hyderabad and Mumbai. This feed is displayed separately from model training and evaluation.
+- On-demand Open-Meteo 24-hour numerical forecast for selected Indian cities, including CAPE, convective inhibition, lifted index, rainfall probability and wind gusts.
+- IMD API adapters for district nowcasts, station nowcasts and district warnings. Requires IMD portal access/credentials if the endpoint is protected.
+- Separate source-labelled panels for model forecasts, official warnings and ML outputs.
 - Dark responsive command-centre dashboard with risk map, analytics, alert desk, observation explorer and CSV exports.
 - Precision, recall, F1, false-alarm rate, missed-event rate and confusion matrix.
 - Risk probability and risk category visualization (demonstration probabilities only until trained and validated on real labelled data).
@@ -75,7 +77,17 @@ Replace the demo CSV with a quality-controlled dataset that follows the schema a
 4. Compare against a simple baseline and report false alarms and missed events.
 5. Calibrate probabilities on a separate validation set before operational interpretation.
 
-The optional Open-Meteo panel retrieves current model-based atmospheric fields for context. It does not provide verified lightning detections or event labels, and it is deliberately not passed into the trained classifier. Radar reflectivity, satellite cloud-top products and lightning-network observations remain future integrations; they are not represented as connected in this prototype.
+The live Open-Meteo panel retrieves numerical weather prediction fields for the selected location. IMD adapters query official district/station nowcasts and warnings. These products are displayed as source data and are not silently used as labels or merged into the synthetic training dataset. Configure `IMD_API_TOKEN` in the deployment environment if required by the IMD API account. Confirm the actual authentication scheme and product permissions with IMD before production use. Radar imagery and lightning products may require specific IMD/MOSDAC permissions or another licensed provider. MOSDAC satellite products require account credentials and dataset access. NASA IMERG Early Run provides near-real-time precipitation estimates with roughly four-hour latency; it is not a substitute for lightning detection. None of these restricted feeds are claimed as active until credentials and data retrieval are verified.
+
+## Live data setup
+
+1. Open the [IMD API portal](https://api.imd.gov.in/public/index.php), create an account and request the products needed: district/station nowcast, district warnings, AWS/ARG, radar and lightning where available.
+2. Add the credential to Render as `IMD_API_TOKEN` (never commit secrets to GitHub). The adapter currently uses a Bearer token; adjust the header only if IMD issues a different authentication method.
+3. Use the Live Weather tab to retrieve Open-Meteo 24-hour forecast-model fields. These are global model outputs, not ground-truth observations.
+4. For model training, obtain time-aligned lightning detections and independently verified thunderstorm event labels. Store event timestamps and locations, then construct separate targets for each lead time (e.g. 30, 60 and 120 minutes).
+5. Keep training, validation and test periods strictly chronological. Evaluate false alarms, missed events, probability calibration and lead-time skill on independent real events.
+
+**Production gate:** The dashboard is not an operational warning service until IMD/MOSDAC credentials and feed access are confirmed, the lightning/observation feeds are live, the ML model is trained and validated on real labelled data, and alert delivery/monitoring are tested. Open-Meteo forecast data alone cannot establish observed lightning strikes.
 
 ## Project structure
 
