@@ -66,7 +66,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### Display")
     show_demo = st.toggle("Show demonstration data notice", value=True)
-    st.caption("Prototype build · v2.0")
+    st.caption("Prototype build · v3.0 · multi-model evaluation")
 
 try:
     data, source_label = load_dataset(uploaded)
@@ -190,7 +190,7 @@ with tabs[2]:
 
 with tabs[3]:
     st.markdown("### Model performance & explainability")
-    st.caption("Chronological holdout evaluation · Logistic Regression vs transparent threshold baseline.")
+    st.caption("Chronological holdout evaluation · Active model selected in the sidebar; compare all candidate models below.")
     b1,b2,b3,b4=st.columns(4)
     b1.metric("Accuracy",f"{metrics['Accuracy']:.1%}")
     b2.metric("Precision",f"{metrics['Precision']:.1%}")
@@ -203,14 +203,26 @@ with tabs[3]:
         cf.update_layout(template="plotly_dark",height=350)
         st.plotly_chart(cf,use_container_width=True)
     with c2:
-        coef=model.named_steps["classifier"].coef_[0]
-        imp=pd.DataFrame({"Feature":FEATURE_COLUMNS,"Coefficient":coef}).sort_values("Coefficient")
-        cf=px.bar(imp,x="Coefficient",y="Feature",orientation="h",color="Coefficient",color_continuous_scale="RdBu",title="Model coefficient direction")
+        classifier = model.named_steps["classifier"]
+        if hasattr(classifier, "feature_importances_"):
+            importance = classifier.feature_importances_
+            title = "Tree-model feature importance"
+        elif hasattr(classifier, "coef_"):
+            importance = np.abs(classifier.coef_[0])
+            title = "Absolute logistic-regression coefficients"
+        else:
+            importance = np.zeros(len(FEATURE_COLUMNS))
+            title = "Feature importance unavailable"
+        imp=pd.DataFrame({"Feature":FEATURE_COLUMNS,"Importance":importance}).sort_values("Importance")
+        cf=px.bar(imp,x="Importance",y="Feature",orientation="h",color="Importance",color_continuous_scale="Teal",title=title)
         cf.update_layout(template="plotly_dark",height=350)
         st.plotly_chart(cf,use_container_width=True)
-    base=metric_summary(y_true,baseline_predictions)
-    compare=pd.DataFrame([{"Model":"Logistic Regression",**metrics},{"Model":"Threshold baseline",**base}])
+    comparison = [{"Model": name, **item["metrics"]} for name,item in model_results.items()]
+    comparison.append({"Model":"Threshold baseline", **baseline_metrics})
+    compare=pd.DataFrame(comparison).sort_values("F1 score",ascending=False)
+    st.markdown("#### Model leaderboard")
     st.dataframe(compare,use_container_width=True,hide_index=True)
+    st.download_button("Download model leaderboard CSV",compare.to_csv(index=False).encode("utf-8"),"stormwatch_model_leaderboard.csv","text/csv")
     st.caption("Synthetic holdout metrics are pipeline demonstrations, not evidence of meteorological forecast skill. Horizon selection is a scenario control; separate horizon-labelled training targets are required for validated 30/60/120-minute forecasts.")
 
 with tabs[4]:
@@ -233,7 +245,7 @@ with tabs[5]:
     st.dataframe(focused.sort_values("timestamp",ascending=False).head(250),use_container_width=True,hide_index=True)
     csv=focused.to_csv(index=False).encode("utf-8")
     st.download_button("⬇ Download observations CSV",csv,"stormwatch_observations.csv","text/csv")
-    report=pd.DataFrame([{"Model":"Logistic Regression",**metrics},{"Model":"Threshold baseline",**base}])
+    report=pd.DataFrame([{"Model": name, **item["metrics"]} for name,item in model_results.items()] + [{"Model":"Threshold baseline", **baseline_metrics}])
     st.download_button("⬇ Download model evaluation CSV",report.to_csv(index=False).encode("utf-8"),"stormwatch_model_metrics.csv","text/csv")
     st.download_button("⬇ Download alert summary CSV",alert_rows.to_csv(index=False).encode("utf-8"),"stormwatch_alert_summary.csv","text/csv")
     st.markdown("#### Data requirements for operational validation")
