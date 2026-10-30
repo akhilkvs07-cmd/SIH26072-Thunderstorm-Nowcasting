@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.data import FEATURE_COLUMNS, load_dataset, validate_dataset
-from src.modeling import train_and_evaluate
+from src.modeling import train_model_zoo
 from src.evaluation import metric_summary
 
 st.set_page_config(page_title="StormWatch | SIH26072", page_icon="⛈️", layout="wide", initial_sidebar_state="expanded")
@@ -59,7 +59,8 @@ with st.sidebar:
     st.caption("Use the schema in README.md. The demo dataset is generated automatically.")
     st.divider()
     st.markdown("### Scenario controls")
-    horizon = st.select_slider("Nowcast horizon", options=[30,60,120], value=60, format_func=lambda x:f"{x} min")
+    horizon = st.select_slider("Scenario horizon", options=[30,60,120], value=60, format_func=lambda x:f"{x} min")
+    selected_model = st.selectbox("Prediction model", ["Logistic Regression", "Random Forest", "Hist Gradient Boosting"])
     threshold = st.slider("Alert threshold", .10, .90, .50, .05)
     city_filter = st.selectbox("Focus region", ["All regions","Bengaluru","Chennai","Hyderabad","Mumbai"])
     st.divider()
@@ -83,18 +84,23 @@ else:
     focused = data.copy()
 
 try:
-    model, test, y_true, probabilities, _, baseline_predictions = train_and_evaluate(data)
+    train, test, y_true, model_results, baseline_metrics = train_model_zoo(data)
+    selected = model_results[selected_model]
+    model = selected['model']
+    probabilities = selected['probabilities']
+    predicted = (probabilities >= threshold).astype(int)
+    metrics = metric_summary(y_true, predicted)
+    metrics['ROC AUC'] = selected['metrics']['ROC AUC']
+    metrics['Brier score'] = selected['metrics']['Brier score']
 except Exception as exc:
-    st.error(f"Model evaluation could not run: {exc}")
+    st.error(f'Model evaluation could not run: {exc}')
     st.stop()
 
-predicted = (probabilities >= threshold).astype(int)
-metrics = metric_summary(y_true, predicted)
-latest = focused.sort_values("timestamp").tail(1).iloc[0]
+latest = focused.sort_values('timestamp').tail(1).iloc[0]
 latest_features = pd.DataFrame([{c:float(latest[c]) for c in FEATURE_COLUMNS}])
 risk_probability = float(model.predict_proba(latest_features)[0,1])
-risk_label = "SEVERE" if risk_probability >= .80 else "HIGH" if risk_probability >= .65 else "WATCH" if risk_probability >= threshold else "LOW"
-risk_color = {"SEVERE":"#ff637d","HIGH":"#ff8c69","WATCH":"#ffbd69","LOW":"#42d6a4"}[risk_label]
+risk_label = 'SEVERE' if risk_probability >= .80 else 'HIGH' if risk_probability >= .65 else 'WATCH' if risk_probability >= threshold else 'LOW'
+risk_color = {'SEVERE':'#ff637d','HIGH':'#ff8c69','WATCH':'#ffbd69','LOW':'#42d6a4'}[risk_label]
 last_time = pd.to_datetime(focused.timestamp.max(),utc=True)
 
 st.markdown(f"""
