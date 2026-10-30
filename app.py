@@ -246,12 +246,15 @@ with tabs[3]:
         else:
             st.info("ROC curve requires both classes in the held-out period.")
     with q2:
-        fraction_positive, mean_predicted = calibration_curve(y_true, probabilities, n_bins=8, strategy="quantile")
-        cal_fig=go.Figure()
-        cal_fig.add_trace(go.Scatter(x=mean_predicted,y=fraction_positive,mode="lines+markers",name="Model calibration",line=dict(color="#ffbd69",width=2)))
-        cal_fig.add_trace(go.Scatter(x=[0,1],y=[0,1],mode="lines",name="Ideal calibration",line=dict(color="#91a6bd",dash="dash")))
-        cal_fig.update_layout(template="plotly_dark",title="Calibration curve",xaxis_title="Mean predicted probability",yaxis_title="Observed event frequency",height=320,paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(cal_fig,use_container_width=True)
+        if len(np.unique(y_true)) == 2:
+            fraction_positive, mean_predicted = calibration_curve(y_true, probabilities, n_bins=8, strategy="quantile")
+            cal_fig=go.Figure()
+            cal_fig.add_trace(go.Scatter(x=mean_predicted,y=fraction_positive,mode="lines+markers",name="Model calibration",line=dict(color="#ffbd69",width=2)))
+            cal_fig.add_trace(go.Scatter(x=[0,1],y=[0,1],mode="lines",name="Ideal calibration",line=dict(color="#91a6bd",dash="dash")))
+            cal_fig.update_layout(template="plotly_dark",title="Calibration curve",xaxis_title="Mean predicted probability",yaxis_title="Observed event frequency",height=320,paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(cal_fig,use_container_width=True)
+        else:
+            st.info("Calibration curve requires both classes in the held-out period.")
     st.markdown("#### Model leaderboard")
     st.dataframe(compare,use_container_width=True,hide_index=True)
     st.download_button("Download model leaderboard CSV",compare.to_csv(index=False).encode("utf-8"),"stormwatch_model_leaderboard.csv","text/csv")
