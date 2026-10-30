@@ -309,6 +309,33 @@ with tabs[5]:
 
 with tabs[6]:
     st.markdown("### Live atmospheric context")
+    forecast_error = st.session_state.get("forecast_error")
+    forecast_data = st.session_state.get("forecast_data")
+    if forecast_error:
+        st.error(forecast_error)
+    if forecast_data:
+        st.markdown("#### 24-hour numerical weather forecast · " + forecast_data["location"])
+        st.caption("Forecast-model output from Open-Meteo; not a direct observation or official warning.")
+        current = forecast_data["current"]
+        a,b,c,d = st.columns(4)
+        a.metric("Temperature", f'{current.get("temperature_2m","—")} °C')
+        b.metric("Humidity", f'{current.get("relative_humidity_2m","—")} %')
+        c.metric("Rain", f'{current.get("precipitation","—")} mm')
+        d.metric("Wind gust", f'{current.get("wind_gusts_10m","—")} km/h')
+        hourly = pd.DataFrame(forecast_data["hourly"])
+        if not hourly.empty and "time" in hourly:
+            hourly["time"] = pd.to_datetime(hourly["time"])
+            series = [c for c in ["precipitation_probability","cape","wind_gusts_10m","relative_humidity_2m"] if c in hourly]
+            if series:
+                chart = px.line(hourly, x="time", y=series, title="Next 24 hours · forecast variables")
+                chart.update_layout(template="plotly_dark", height=360, paper_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(chart, use_container_width=True)
+            st.dataframe(hourly, use_container_width=True, hide_index=True)
+            st.download_button("Download 24-hour forecast CSV", hourly.to_csv(index=False).encode("utf-8"), "stormwatch_24h_forecast.csv", "text/csv")
+        st.caption("Source: " + forecast_data["source"] + " · " + forecast_data["source_url"])
+    else:
+        st.info("Fetch a location-specific 24-hour forecast from the sidebar to populate this panel.")
+
     st.caption("Current model-based weather fields for four demonstration cities. This feed is separate from the labelled training dataset.")
     live_error = st.session_state.get("live_weather_error")
     live_rows = st.session_state.get("live_weather_context")
