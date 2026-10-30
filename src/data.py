@@ -1,5 +1,10 @@
 """Dataset loading and validation utilities."""
 from __future__ import annotations
+
+from pathlib import Path
+import subprocess
+import sys
+
 import pandas as pd
 
 REQUIRED_COLUMNS = [
@@ -11,6 +16,7 @@ FEATURE_COLUMNS = [
     "temperature_c", "humidity_pct", "pressure_hpa", "wind_speed_ms",
     "precipitation_mm", "cape_jkg", "lightning_count",
 ]
+
 
 def validate_dataset(frame: pd.DataFrame) -> pd.DataFrame:
     missing = [c for c in REQUIRED_COLUMNS if c not in frame.columns]
@@ -30,10 +36,32 @@ def validate_dataset(frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("Latitude/longitude outside valid geographic ranges")
     return data.sort_values("timestamp").reset_index(drop=True)
 
+
 def load_dataset(uploaded_file=None, path: str = "data/demo_observations.csv") -> tuple[pd.DataFrame, str]:
     if uploaded_file is not None:
         return validate_dataset(pd.read_csv(uploaded_file)), "Uploaded observations"
-    try:
-        return validate_dataset(pd.read_csv(path)), "Synthetic demonstration dataset"
-    except FileNotFoundError:
-        raise FileNotFoundError("Demo dataset not found. Run: python scripts/generate_demo_data.py")
+
+    dataset_path = Path(path)
+    if not dataset_path.exists():
+        project_root = Path(__file__).resolve().parents[1]
+        generator = project_root / "scripts" / "generate_demo_data.py"
+        if not generator.exists():
+            raise FileNotFoundError(
+                "Demo dataset and its generator are both missing from the deployment."
+            )
+        try:
+            subprocess.run(
+                [sys.executable, str(generator)],
+                cwd=project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            details = (exc.stderr or exc.stdout or "No details returned").strip()
+            raise RuntimeError(f"Could not generate demo dataset: {details}") from exc
+
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Demo dataset was not created at {dataset_path}")
+
+    return validate_dataset(pd.read_csv(dataset_path)), "Synthetic demonstration dataset"
