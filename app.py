@@ -44,6 +44,8 @@ div[data-testid="stAlert"]{border-radius:12px}
 .hero-sub{color:#9db4ca;font-size:13px;margin-top:5px}
 .pill{display:inline-block;border:1px solid #7c6537;background:#392b18;color:#ffd18a;padding:5px 9px;border-radius:20px;font:600 10px 'DM Mono',monospace;letter-spacing:.08em}
 .section-note{color:#91a6bd;font-size:12px;margin-top:-8px}
+
+.hero{padding:clamp(16px,3vw,28px);overflow:hidden}.hero-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.hero-title{font-size:clamp(25px,4vw,42px);line-height:1.12;letter-spacing:-1px;overflow-wrap:anywhere}.hero-sub{line-height:1.6}.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:12px 0 20px}.kpi{background:linear-gradient(145deg,#122740,#0d1b2d);border:1px solid #27435e;border-radius:13px;padding:14px;min-width:0}.kpi-label{color:#9eb4ca;font-size:11px}.kpi-value{font-size:clamp(20px,2.3vw,28px);font-weight:800;color:#f2f7ff;margin:8px 0 3px;overflow-wrap:anywhere}.kpi-note{font:500 10px 'DM Mono',monospace;color:#42d6a4;line-height:1.4}@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:last-child{grid-column:span 2}}@media(max-width:600px){.block-container{padding:1rem .75rem 2rem}.hero{padding:16px;border-radius:14px}.hero-title{font-size:clamp(25px,8vw,34px)}.hero-sub{font-size:12px}.kpi{padding:12px}.kpi-value{font-size:24px}div[data-testid='stTabs'] button{font-size:11px;padding:6px 7px}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,21 +99,24 @@ last_time = pd.to_datetime(focused.timestamp.max(),utc=True)
 
 st.markdown(f"""
 <div class="hero">
- <div class="smallcaps">Atmospheric intelligence platform <span style="float:right" class="pill">● DEMO ENVIRONMENT</span></div>
- <div class="hero-title">StormWatch <span style="color:#42d6e8">/</span> Nowcasting Centre</div>
- <div class="hero-sub">AI-assisted thunderstorm risk monitoring · {source_label} · Data timestamp: {last_time.strftime('%d %b %Y, %H:%M UTC')}</div>
+ <div class="hero-top"><div class="smallcaps">ATMOSPHERIC INTELLIGENCE PLATFORM</div><span class="pill">● DEMO ENVIRONMENT</span></div>
+ <div class="hero-title">StormWatch <span style="color:#42d6e8">/</span><br>Nowcasting Centre</div>
+ <div class="hero-sub">AI-assisted thunderstorm risk monitoring<br>{source_label} · Sample timestamp: {last_time.strftime('%d %b %Y, %H:%M UTC')}</div>
 </div>
 """, unsafe_allow_html=True)
 if show_demo or uploaded is None:
     st.warning("DEMONSTRATION ONLY — the bundled observations are synthetic. Risk scores, maps and alerts are illustrative, not live meteorological forecasts or public-safety warnings.")
 
-# Top status strip
-k1,k2,k3,k4,k5 = st.columns(5)
-k1.metric("Current risk index", f"{risk_probability:.0%}", risk_label)
-k2.metric("Forecast window", f"{horizon} min", "Scenario setting")
-k3.metric("Observations", f"{len(focused):,}", f"{focused.timestamp.nunique():,} time points")
-k4.metric("Lightning detections", f"{int(focused.lightning_count.sum()):,}", "In selected sample")
-k5.metric("Storm-labelled rows", f"{focused.storm_event.mean():.1%}", "Historical sample share")
+# Compact responsive KPI strip
+st.markdown(f"""
+<div class="kpi-grid">
+ <div class="kpi"><div class="kpi-label">CURRENT RISK INDEX</div><div class="kpi-value">{risk_probability:.0%}</div><div class="kpi-note">{risk_label} · illustrative</div></div>
+ <div class="kpi"><div class="kpi-label">SCENARIO HORIZON</div><div class="kpi-value">{horizon} min</div><div class="kpi-note">User-selected setting</div></div>
+ <div class="kpi"><div class="kpi-label">OBSERVATIONS</div><div class="kpi-value">{len(focused):,}</div><div class="kpi-note">{focused.timestamp.nunique():,} time points</div></div>
+ <div class="kpi"><div class="kpi-label">LIGHTNING SAMPLE COUNT</div><div class="kpi-value">{int(focused.lightning_count.sum()):,}</div><div class="kpi-note">Synthetic sample only</div></div>
+ <div class="kpi"><div class="kpi-label">STORM-LABEL SHARE</div><div class="kpi-value">{focused.storm_event.mean():.1%}</div><div class="kpi-note">Historical sample share</div></div>
+</div>
+""", unsafe_allow_html=True)
 
 tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric analytics","🤖 AI model lab","🚨 Alert desk","📁 Data & reports"])
 
