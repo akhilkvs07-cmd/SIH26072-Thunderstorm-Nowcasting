@@ -14,4 +14,4 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: python scripts/generate_demo_data.py
-      - run: pytest -q
+      - run: PYTHONPATH=. pytest -q
