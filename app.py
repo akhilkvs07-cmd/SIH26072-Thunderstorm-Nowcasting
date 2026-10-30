@@ -15,6 +15,7 @@ import streamlit as st
 from src.data import FEATURE_COLUMNS, load_dataset, validate_dataset
 from src.modeling import train_model_zoo
 from src.evaluation import metric_summary
+from src.live_weather import fetch_current_conditions
 
 st.set_page_config(page_title="StormWatch | SIH26072", page_icon="⛈️", layout="wide", initial_sidebar_state="expanded")
 
@@ -66,6 +67,14 @@ with st.sidebar:
     st.divider()
     st.markdown("### Display")
     show_demo = st.toggle("Show demonstration data notice", value=True)
+    if st.button("↻ Fetch live weather context", use_container_width=True):
+        with st.spinner("Fetching current model-based weather fields…"):
+            try:
+                st.session_state["live_weather_context"] = fetch_current_conditions()
+                st.session_state["live_weather_error"] = None
+            except Exception as exc:
+                st.session_state["live_weather_error"] = str(exc)
+    st.caption("Live context is fetched on demand from Open-Meteo; it is not used to train or validate the storm classifier.")
     st.caption("Prototype build · v3.0 · multi-model evaluation")
 
 try:
@@ -124,7 +133,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric analytics","🤖 AI model lab","🚨 Alert desk","📁 Data & reports"])
+tabs = st.tabs(["🌩️ Command centre","🗺️ Risk map","📈 Atmospheric analytics","🤖 AI model lab","🚨 Alert desk","📁 Data & reports","🌐 Live weather context"])
 
 with tabs[0]:
     st.markdown("### Regional situation overview")
@@ -211,8 +220,10 @@ with tabs[3]:
             importance = np.abs(classifier.coef_[0])
             title = "Absolute logistic-regression coefficients"
         else:
-            importance = np.zeros(len(FEATURE_COLUMNS))
-            title = "Feature importance unavailable"
+            from sklearn.inspection import permutation_importance
+            perm = permutation_importance(model, test[FEATURE_COLUMNS], y_true, n_repeats=5, random_state=42, scoring="f1")
+            importance = perm.importances_mean
+            title = "Permutation feature importance (F1 decrease)"
         imp=pd.DataFrame({"Feature":FEATURE_COLUMNS,"Importance":importance}).sort_values("Importance")
         cf=px.bar(imp,x="Importance",y="Feature",orientation="h",color="Importance",color_continuous_scale="Teal",title=title)
         cf.update_layout(template="plotly_dark",height=350)
@@ -250,6 +261,40 @@ with tabs[5]:
     st.download_button("⬇ Download alert summary CSV",alert_rows.to_csv(index=False).encode("utf-8"),"stormwatch_alert_summary.csv","text/csv")
     st.markdown("#### Data requirements for operational validation")
     st.markdown("- Timestamp-aligned radar reflectivity and satellite cloud products\n- Quality-controlled lightning network detections\n- Surface station observations and verified event labels\n- Documented forecast horizon, spatial resolution and missing-data policy")
+
+
+with tabs[6]:
+    st.markdown("### Live atmospheric context")
+    st.caption("Current model-based weather fields for four demonstration cities. This feed is separate from the labelled training dataset.")
+    live_error = st.session_state.get("live_weather_error")
+    live_rows = st.session_state.get("live_weather_context")
+    if live_error:
+        st.error(f"Weather feed could not be reached: {live_error}")
+    if not live_rows:
+        st.info("Select **Fetch live weather context** in the sidebar to retrieve current conditions. Internet access is required.")
+    else:
+        live_df = pd.DataFrame(live_rows)
+        st.success("Live context retrieved from Open-Meteo. Values are model-based estimates, not station observations.")
+        k1,k2,k3,k4 = st.columns(4)
+        k1.metric("Cities", len(live_df))
+        k2.metric("Mean temperature", f"{live_df.temperature_c.mean():.1f} °C")
+        k3.metric("Mean humidity", f"{live_df.humidity_pct.mean():.0f}%")
+        k4.metric("Mean wind", f"{live_df.wind_speed_kmh.mean():.1f} km/h")
+        live_map = px.scatter_map(
+            live_df, lat="latitude", lon="longitude", color="humidity_pct",
+            size="precipitation_mm", size_max=28, hover_name="region",
+            hover_data=["temperature_c","humidity_pct","precipitation_mm","wind_speed_kmh","cape_jkg"],
+            color_continuous_scale="Teal", zoom=3.4,
+            center={"lat":17.5,"lon":78.5}, height=430
+        )
+        live_map.update_layout(map_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0,r=0,t=0,b=0))
+        st.plotly_chart(live_map, use_container_width=True)
+        display_cols = ["region","timestamp_utc","temperature_c","humidity_pct","precipitation_mm","pressure_hpa","wind_speed_kmh","wind_gusts_kmh","cape_jkg","source"]
+        st.dataframe(live_df[display_cols], use_container_width=True, hide_index=True)
+        st.download_button("Download live context CSV", live_df.to_csv(index=False).encode("utf-8"), "stormwatch_live_weather_context.csv", "text/csv")
+        st.warning("Open-Meteo current weather/CAPE fields do not provide verified lightning detections or an observed thunderstorm-event label. These values are context only and are not passed into the trained classifier.")
+    st.markdown("#### Data-source roadmap")
+    st.markdown("- Open-Meteo model-based atmospheric context is available on demand.\n- Add quality-controlled IMD / radar / satellite feeds after confirming access, licensing and update frequency.\n- Add lightning-network detections and event timestamps before claiming lightning nowcasting skill.")
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#7189a2;font-size:11px">STORMWATCH · SIH 2026 · PROBLEM STATEMENT 26072<br>Academic prototype · Synthetic data demonstration · Not for operational warnings</div>',unsafe_allow_html=True)
