@@ -16,6 +16,7 @@ from src.data import FEATURE_COLUMNS, load_dataset, validate_dataset
 from src.modeling import train_model_zoo
 from src.evaluation import metric_summary
 from src.live_weather import fetch_current_conditions
+from src.features import haversine_km
 
 st.set_page_config(page_title="StormWatch | SIH26072", page_icon="⛈️", layout="wide", initial_sidebar_state="expanded")
 
@@ -141,7 +142,7 @@ with tabs[0]:
     def nearest_region(row):
         coords = {"Bengaluru": (12.97, 77.59), "Chennai": (13.08, 80.27),
                   "Hyderabad": (17.38, 78.49), "Mumbai": (19.07, 72.88)}
-        return min(coords, key=lambda name: abs(row.latitude - coords[name][0]) + abs(row.longitude - coords[name][1]))
+        return min(coords, key=lambda name: haversine_km(row.latitude, row.longitude, coords[name][0], coords[name][1]))
 
     loc = focused.copy()
     loc["region"] = loc.apply(nearest_region, axis=1)
