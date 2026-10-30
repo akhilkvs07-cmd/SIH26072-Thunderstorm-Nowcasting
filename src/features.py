@@ -19,3 +19,14 @@ def chronological_split(frame: pd.DataFrame, test_fraction: float = 0.25):
 
 def get_xy(frame: pd.DataFrame):
     return frame[FEATURE_COLUMNS].astype(float), frame["storm_event"].astype(int)
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance between two latitude/longitude points in km."""
+    import numpy as np
+    earth_radius_km = 6371.0088
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    return float(2 * earth_radius_km * np.arcsin(np.sqrt(np.clip(a, 0, 1))))
