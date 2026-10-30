@@ -1,6 +1,7 @@
 import pandas as pd
 from src.data import validate_dataset
 from src.evaluation import metric_summary
+from src.features import haversine_km
 
 def test_validation_and_metrics():
     frame = pd.DataFrame({
@@ -16,3 +17,7 @@ def test_validation_and_metrics():
     metrics = metric_summary([0, 1], [0, 1])
     assert metrics["Precision"] == 1.0
     assert metrics["Recall"] == 1.0
+
+
+def test_haversine_distance_is_zero_for_same_point():
+    assert haversine_km(12.97, 77.59, 12.97, 77.59) == 0.0
